@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Orbit Center" />
+  <title>ErgoÉcoSet · Orbit Center</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #060d10; }
+    #root { min-height: 100vh; }
+    #loading {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(160deg, #060d10, #0d1a18);
+      color: #3DAB7E;
+      font-family: Georgia, serif;
+      gap: 16px;
+    }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 3px solid rgba(61,171,126,0.2);
+      border-top: 3px solid #3DAB7E;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div style="font-size:40px">🌿</div>
+    <div class="spinner"></div>
+    <div style="font-size:14px;font-weight:700;letter-spacing:0.1em">ERGOÉCOSET · ORBIT CENTER</div>
+    <div style="font-size:11px;color:rgba(61,171,126,0.5)">Chargement en cours...</div>
+  </div>
+  <div id="root" style="display:none"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18",
+      "react-dom/client": "https://esm.sh/react-dom@18/client",
+      "react/jsx-runtime": "https://esm.sh/react@18/jsx-runtime"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import React, { useState, useEffect } from "react";
+    import { createRoot } from "react-dom/client";
+
+    // ══ FIREBASE CONFIG ══
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBOB4-OytppdMJT1Cx8U2Z6Z5wWSr26x4Q",
+      authDomain: "ergoecoset.firebaseapp.com",
+      databaseURL: "https://ergoecoset-default-rtdb.firebaseio.com",
+      projectId: "ergoecoset",
+      storageBucket: "ergoecoset.firebasestorage.app",
+      messagingSenderId: "657210258604",
+      appId: "1:657210258604:web:05745735a7037dbbfa9b09"
+    };
+
+    const USERS = {
+      guy:    { id:"guy",    name:"Guy Augustin",        role:"Président-Fondateur",            avatar:"GA", color:"#C9A84C", permissions:["finance","fournisseurs","moules","produits","commandes","documents","legal","admin"], location:"Montréal 🇨🇦", tag:"Accès complet + validation finale" },
+      castro: { id:"castro", name:"Castro Guy Gérard II", role:"Dir. Business & Amazon FBA/FBM",avatar:"CG", color:"#3DAB7E", permissions:["finance","fournisseurs","moules","produits","commandes"],                            location:"Florida 🇺🇸",  tag:"Finissant en Business · Opérations & Commerce" },
+      gandhi: { id:"gandhi", name:"Gandhi Machiaveli",    role:"Conseiller Juridique",          avatar:"GM", color:"#4C8EBF", permissions:["documents","legal"],                                                                 location:"Haïti 🇭🇹",   tag:"Mémorant en Droit · Documents & Légal" },
+    };
+    const ENTITES = {
+      ergo:    { nom:"ErgoÉcoSet Inc.",    icon:"🌿", color:"#3DAB7E", canal:"Amazon FBA", type:"Société incorporée" },
+      express: { nom:"Express-E-Boutique", icon:"🛍️", color:"#C9A84C", canal:"Amazon FBM", type:"Entreprise individuelle" },
+    };
+    const PRODUITS = [
+      { id:"EP-01", nom:"ErgoCubePlate", phase:"jetable",      statut:"moule_en_cours", icon:"🟫" },
+      { id:"EP-02", nom:"ErgoBowl",      phase:"jetable",      statut:"moule_en_cours", icon:"🥣" },
+      { id:"EP-03", nom:"ErgoCutlery",   phase:"jetable",      statut:"prototype",      icon:"🍴" },
+      { id:"EP-04", nom:"ErgoCup",       phase:"jetable",      statut:"moule_en_cours", icon:"🥤" },
+      { id:"EP-05", nom:"ErgoBag",       phase:"jetable",      statut:"prototype",      icon:"🛍️" },
+      { id:"EP-06", nom:"ErgoTray",      phase:"réutilisable", statut:"conception",     icon:"🗂️" },
+      { id:"EP-07", nom:"ErgoLidSet",    phase:"réutilisable", statut:"conception",     icon:"🔒" },
+    ];
+    const DEFAULT_DATA = {
+      finances:[
+        {id:"f1",label:"Budget moules prototypes – Chine",        montant:3800,devise:"USD",statut:"en_attente",auteur:"guy",   date:"2026-05-20",entite:"ergo"},
+        {id:"f2",label:"Frais échantillons ErgoBowl + ErgoCup",   montant:640, devise:"USD",statut:"approuvé",  auteur:"castro",date:"2026-05-18",entite:"ergo"},
+        {id:"f3",label:"Enregistrement marque ErgoÉcoSet – CIPO", montant:458, devise:"CAD",statut:"en_attente",auteur:"guy",   date:"2026-05-22",entite:"ergo"},
+        {id:"f4",label:"Frais Amazon FBM – Express-E-Boutique",   montant:290, devise:"CAD",statut:"approuvé",  auteur:"castro",date:"2026-05-15",entite:"express"},
+      ],
+      fournisseurs:[
+        {id:"s1",nom:"GreenMold Ningbo Co.",  ville:"Ningbo",   produits:["ErgoBowl","ErgoCup","ErgoCubePlate"],statut:"négociation_moule",bpas:true, note:"Spécialisé moules injection écologique"},
+        {id:"s2",nom:"EcoForm Shenzhen Ltd.", ville:"Shenzhen", produits:["ErgoCutlery","ErgoBag"],             statut:"échantillon_reçu", bpas:true, note:"Bons délais, qualité suivie"},
+        {id:"s3",nom:"SinoPackage Guangzhou",ville:"Guangzhou",produits:["ErgoTray","ErgoLidSet"],             statut:"prospect",          bpas:false,note:"Phase 2 – à confirmer"},
+      ],
+      moules:[
+        {id:"m1",produit:"ErgoBowl EP-02",     fournisseur:"GreenMold Ningbo Co.", statut:"prototype_commandé",phase:"jetable",cout:1200,devise:"USD",dateEst:"2026-07-15",specs:"Parois 2mm, base antidérapante"},
+        {id:"m2",produit:"ErgoCup EP-04",      fournisseur:"GreenMold Ningbo Co.", statut:"en_discussion",    phase:"jetable",cout:980, devise:"USD",dateEst:"2026-08-01",specs:"Double paroi isolante"},
+        {id:"m3",produit:"ErgoCubePlate EP-01",fournisseur:"GreenMold Ningbo Co.", statut:"devis_reçu",       phase:"jetable",cout:1600,devise:"USD",dateEst:"2026-08-20",specs:"15x15cm, compartiments séparés"},
+        {id:"m4",produit:"ErgoCutlery EP-03",  fournisseur:"EcoForm Shenzhen Ltd.",statut:"en_discussion",    phase:"jetable",cout:750, devise:"USD",dateEst:"2026-09-01",specs:"Set PLA compostable"},
+      ],
+      documents:[
+        {id:"d1",titre:"Contrat cadre GreenMold Ningbo",  type:"Contrat",   statut:"a_reviser",assigné:"gandhi",date:"2026-05-19",urgent:true, entite:"ergo"},
+        {id:"d2",titre:"Declaration BPA-free / PFAS-free",type:"Conformité",statut:"approuvé", assigné:"gandhi",date:"2026-05-10",urgent:false,entite:"ergo"},
+        {id:"d3",titre:"CGV Express-E-Boutique Amazon",   type:"Legal",     statut:"brouillon",assigné:"gandhi",date:"2026-05-21",urgent:false,entite:"express"},
+        {id:"d4",titre:"Depot marque ErgoEcoSet CIPO",    type:"PI",        statut:"a_reviser",assigné:"gandhi",date:"2026-05-22",urgent:true, entite:"ergo"},
+        {id:"d5",titre:"NDA fournisseurs Chine",          type:"NDA",       statut:"brouillon",assigné:"gandhi",date:"2026-05-20",urgent:true, entite:"ergo"},
+      ],
+      decisions:[
+        {id:"dc1",sujet:"Valider budget moule ErgoBowl 1200 USD",     demandeur:"castro",statut:"en_attente",priorité:"haute",  date:"2026-05-22",notes:"GreenMold attend avant le 30 mai.",       entite:"ergo"},
+        {id:"dc2",sujet:"Signer contrat GreenMold apres revision",    demandeur:"gandhi",statut:"en_attente",priorité:"urgente",date:"2026-05-21",notes:"Clause 7.3 sur certifications a corriger.",entite:"ergo"},
+        {id:"dc3",sujet:"Strategie Phase 1 seule vs Phase 2",         demandeur:"guy",   statut:"discute",   priorité:"normale",date:"2026-05-18",notes:"Decision strategique familiale.",          entite:"ergo"},
+        {id:"dc4",sujet:"Activer compte Amazon FBA ErgoEcoSet Inc.",   demandeur:"castro",statut:"en_attente",priorité:"haute",  date:"2026-05-23",notes:"Documents incorporation requis.",         entite:"ergo"},
+      ],
+      activite:[],
+    };
+
+    const SC={en_attente:"#F0A500",approuvé:"#3DAB7E",brouillon:"#888",a_reviser:"#E05A2B","à_réviser":"#E05A2B",négociation_moule:"#9B6BCC",échantillon_reçu:"#3DAB7E",prospect:"#4C8EBF",discute:"#888",discuté:"#888",prototype_commandé:"#F0A500",en_discussion:"#9B6BCC",devis_reçu:"#4C8EBF",rejeté:"#CC4444",conception:"#888",moule_en_cours:"#F0A500",prototype:"#9B6BCC",urgente:"#E05A2B",haute:"#F0A500",normale:"#3DAB7E"};
+    const SL={en_attente:"En attente",approuvé:"Approuvé ✓",brouillon:"Brouillon",a_reviser:"A réviser","à_réviser":"À réviser",négociation_moule:"Négociation moule",échantillon_reçu:"Échantillon reçu",prospect:"Prospect",discute:"Discuté",discuté:"Discuté",prototype_commandé:"Proto commandé",en_discussion:"En discussion",devis_reçu:"Devis reçu",rejeté:"Rejeté",conception:"Conception",moule_en_cours:"Moule en cours",prototype:"Prototype",urgente:"🔴 Urgente",haute:"🟡 Haute",normale:"🟢 Normale"};
+
+    const h=React.createElement;
+    const Badge=({s,sm})=>{ const c=SC[s]||"#888"; return h("span",{style:{background:c+"22",color:c,border:`1px solid ${c}55`,borderRadius:6,padding:sm?"1px 7px":"2px 10px",fontSize:sm?10:11,fontWeight:700,whiteSpace:"nowrap"}},SL[s]||s); };
+    const EBadge=({e})=>{ const x=ENTITES[e]; if(!x) return null; return h("span",{style:{background:x.color+"20",color:x.color,border:`1px solid ${x.color}44`,borderRadius:5,padding:"1px 8px",fontSize:10,fontWeight:700}},x.icon+" "+x.nom); };
+    const Av=({uid,size=36})=>{ const u=USERS[uid]||USERS.guy; return h("div",{style:{width:size,height:size,borderRadius:"50%",background:u.color+"25",border:`2px solid ${u.color}`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:size*0.33,color:u.color,flexShrink:0}},u.avatar); };
+    const Card=({children,style={}})=>h("div",{style:{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.09)",borderRadius:14,padding:"18px 20px",...style}},children);
+    const Row=({children,urgent})=>h("div",{style:{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,flexWrap:"wrap",background:urgent?"rgba(224,90,43,0.07)":"rgba(255,255,255,0.025)",border:`1px solid ${urgent?"rgba(224,90,43,0.28)":"rgba(255,255,255,0.07)"}`}},children);
+    const Btn=({color,children,onClick})=>h("button",{onClick,style:{padding:"5px 12px",borderRadius:7,cursor:"pointer",border:`1px solid ${color}55`,background:color+"20",color,fontSize:11,fontWeight:800,fontFamily:"inherit",whiteSpace:"nowrap"}},children);
+
+    function App() {
+      const [uid,setUid]=useState("guy");
+      const [tab,setTab]=useState("dashboard");
+      const [data,setData]=useState(DEFAULT_DATA);
+      const [toast,setToast]=useState(null);
+      const [fbOk,setFbOk]=useState(false);
+      const [fbSync,setFbSync]=useState(false);
+      const [showND,setShowND]=useState(false);
+      const [nd,setNd]=useState({sujet:"",notes:"",priorité:"normale",entite:"ergo"});
+
+      const user=USERS[uid];
+      const can=p=>user.permissions.includes(p);
+      const showToast=(msg,err=false)=>{setToast({msg,err});setTimeout(()=>setToast(null),3200);};
+
+      useEffect(()=>{
+        let mounted=true;
+        (async()=>{
+          try {
+            setFbSync(true);
+            const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+            const {getDatabase,ref,onValue,set}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+            if(!getApps().length) initializeApp(FIREBASE_CONFIG);
+            const db=getDatabase();
+            window._db=db;window._ref=ref;window._set=set;
+            const rootRef=ref(db,"orbit");
+            onValue(rootRef,snap=>{
+              if(!mounted)return;
+              const val=snap.val();
+              if(!val){set(ref(db,"orbit"),DEFAULT_DATA).catch(()=>{});}
+              else{setData(val);}
+              setFbOk(true);setFbSync(false);
+              document.getElementById("loading").style.display="none";
+              document.getElementById("root").style.display="block";
+            },()=>{if(mounted){setFbOk(false);setFbSync(false);}});
+          } catch(e){
+            if(mounted){setFbOk(false);setFbSync(false);}
+            document.getElementById("loading").style.display="none";
+            document.getElementById("root").style.display="block";
+          }
+        })();
+        return ()=>{mounted=false;};
+      },[]);
+
+      const writeDB=async(path,value)=>{
+        if(fbOk&&window._db){
+          setFbSync(true);
+          try{await window._set(window._ref(window._db,`orbit/${path}`),value);}
+          catch(e){showToast("Erreur Firebase","err");}
+          finally{setFbSync(false);}
+        }
+      };
+
+      const logAct=(action,entite="ergo")=>{
+        const key=`act_${Date.now()}`;
+        const entry={action,auteur:uid,entite,ts:Date.now()};
+        if(fbOk&&window._db) window._set(window._ref(window._db,`orbit/activite/${key}`),entry).catch(()=>{});
+        setData(d=>({...d,activite:[entry,...(d.activite||[])].slice(0,30)}));
+      };
+
+      const getArr=s=>Array.isArray(data[s])?data[s]:Object.values(data[s]||{});
+      const approuver=(section,id)=>{
+        const arr=getArr(section);
+        const item=arr.find(x=>x.id===id);
+        if(!item)return;
+        const updated={...item,statut:"approuvé"};
+        writeDB(`${section}/${id}`,updated);
+        setData(d=>({...d,[section]:Array.isArray(d[section])?d[section].map(x=>x.id===id?updated:x):{...d[section],[id]:updated}}));
+        logAct(`Approuvé: ${item.label||item.sujet||item.titre||item.produit||id}`,item.entite||"ergo");
+        showToast(fbOk?"Approuvé - Synchronisé Firebase!":"Approuvé");
+      };
+      const rejeter=(section,id)=>{
+        const arr=getArr(section);
+        const item=arr.find(x=>x.id===id);
+        if(!item)return;
+        const updated={...item,statut:"rejeté"};
+        writeDB(`${section}/${id}`,updated);
+        setData(d=>({...d,[section]:Array.isArray(d[section])?d[section].map(x=>x.id===id?updated:x):{...d[section],[id]:updated}}));
+        logAct(`Rejeté: ${item.label||item.sujet||item.titre||id}`,item.entite||"ergo");
+        showToast("Rejeté",true);
+      };
+      const soumettreDecision=()=>{
+        if(!nd.sujet.trim())return;
+        const key=`dc${Date.now()}`;
+        const entry={id:key,sujet:nd.sujet,demandeur:uid,statut:"en_attente",priorité:nd.priorité,date:new Date().toISOString().slice(0,10),notes:nd.notes,entite:nd.entite};
+        writeDB(`decisions/${key}`,entry);
+        setData(d=>({...d,decisions:[entry,...(Array.isArray(d.decisions)?d.decisions:Object.values(d.decisions||{}))]}));
+        logAct(`Nouvelle decision: ${nd.sujet}`,nd.entite);
+        setNd({sujet:"",notes:"",priorité:"normale",entite:"ergo"});
+        setShowND(false);
+        showToast("Decision soumise a Guy Augustin");
+      };
+
+      const finances=getArr("finances");
+      const fournisseurs=getArr("fournisseurs");
+      const moules=getArr("moules");
+      const documents=getArr("documents");
+      const decisions=getArr("decisions").sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+      const activite=getArr("activite").sort((a,b)=>(b.ts||0)-(a.ts||0));
+      const attentes=decisions.filter(d=>d.statut==="en_attente").length;
+      const docsUrg=documents.filter(d=>d.urgent&&d.statut!=="approuvé").length;
+
+      const TABS=[
+        {id:"dashboard",label:"Dashboard",icon:"🌐",perm:null},
+        {id:"produits",label:"Produits",icon:"🌿",perm:"produits"},
+        {id:"moules",label:"Moules",icon:"🔩",perm:"moules"},
+        {id:"fournisseurs",label:"Fournisseurs",icon:"🏭",perm:"fournisseurs"},
+        {id:"finances",label:"Finances",icon:"💰",perm:"finance"},
+        {id:"documents",label:"Documents",icon:"📄",perm:"documents"},
+        {id:"decisions",label:"Decisions",icon:"⚖️",perm:null},
+        {id:"activite",label:"Activite",icon:"📡",perm:null},
+      ].filter(t=>!t.perm||can(t.perm));
+
+      const inp={width:"100%",padding:"8px 12px",borderRadius:7,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.14)",color:"#e8dcc8",fontFamily:"inherit",fontSize:12,outline:"none"};
+      const S={minHeight:"100vh",background:"linear-gradient(160deg,#060d10 0%,#0d1a18 55%,#060d10 100%)",fontFamily:"Georgia,serif",color:"#e8dcc8"};
+
+      return h("div",{style:S},
+        toast&&h("div",{style:{position:"fixed",top:14,right:14,zIndex:9999,background:toast.err?"#1a0808":"#081a10",border:`1px solid ${toast.err?"#E05A2B":"#3DAB7E"}`,color:toast.err?"#E05A2B":"#3DAB7E",borderRadius:10,padding:"10px 16px",fontWeight:800,fontSize:12}},toast.msg),
+        h("div",{style:{maxWidth:1100,margin:"0 auto",padding:"0 14px"}},
+          // HEADER
+          h("header",{style:{borderBottom:"1px solid rgba(61,171,126,0.18)",padding:"14px 0 12px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}},
+            h("div",{style:{display:"flex",alignItems:"center",gap:11}},
+              h("div",{style:{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#3DAB7E,#1a5c3e)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}},"🌿"),
+              h("div",null,
+                h("div",{style:{fontSize:19,fontWeight:900}},
+                  h("span",{style:{color:"#3DAB7E"}},"ErgoEcoSet"),
+                  h("span",{style:{color:"rgba(232,220,200,0.25)",margin:"0 6px"}},"·"),
+                  h("span",{style:{color:"#C9A84C",fontSize:15}},"Orbit Center")
+                ),
+                h("div",{style:{fontSize:9,color:"rgba(232,220,200,0.3)",letterSpacing:"0.1em",fontFamily:"monospace"}},"ERGOECOSSET INC. · EXPRESS-E-BOUTIQUE · GUY AUGUSTIN")
+              )
+            ),
+            h("div",{style:{display:"flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:20,background:fbOk?"rgba(61,171,126,0.12)":"rgba(240,165,0,0.12)",border:`1px solid ${fbOk?"rgba(61,171,126,0.4)":"rgba(240,165,0,0.4)"}`}},
+              h("div",{style:{width:8,height:8,borderRadius:"50%",background:fbOk?"#3DAB7E":"#F0A500"}}),
+              h("span",{style:{fontSize:11,fontWeight:800,color:fbOk?"#3DAB7E":"#F0A500"}},
+                fbSync?"Sync...":fbOk?"Firebase LIVE":"Connexion..."
+              )
+            )
+          ),
+          // SWITCHER
+          h("div",{style:{display:"flex",gap:6,margin:"12px 0 0",flexWrap:"wrap"}},
+            Object.values(USERS).map(u=>h("button",{key:u.id,onClick:()=>{setUid(u.id);setTab("dashboard");},style:{display:"flex",alignItems:"center",gap:7,padding:"6px 12px",borderRadius:9,cursor:"pointer",border:`1.5px solid ${uid===u.id?u.color:"rgba(255,255,255,0.09)"}`,background:uid===u.id?u.color+"18":"transparent",color:uid===u.id?u.color:"rgba(232,220,200,0.45)",fontFamily:"inherit",fontSize:12,fontWeight:700}},
+              h(Av,{uid:u.id,size:22}),
+              h("div",{style:{lineHeight:1.3}},
+                h("div",null,u.id==="guy"?"Guy (Moi)":u.name.split(" ")[0]),
+                h("div",{style:{fontSize:9,opacity:0.5}},u.location)
+              ),
+              fbOk&&h("div",{style:{width:6,height:6,borderRadius:"50%",background:"#3DAB7E"}})
+            )),
+            fbOk&&h("div",{style:{marginLeft:"auto",padding:"6px 12px",borderRadius:9,background:"rgba(61,171,126,0.08)",border:"1px solid rgba(61,171,126,0.25)",fontSize:10,color:"#3DAB7E",fontWeight:800}},"LIVE · MTL + FLA + HTI")
+          ),
+          // BANNIERE
+          h("div",{style:{margin:"10px 0",padding:"12px 16px",borderRadius:11,background:`linear-gradient(90deg,${user.color}12,transparent)`,border:`1px solid ${user.color}28`,display:"flex",alignItems:"center",gap:11,flexWrap:"wrap"}},
+            h(Av,{uid,size:44}),
+            h("div",{style:{flex:1}},
+              h("div",{style:{fontWeight:900,fontSize:14,color:user.color}},user.name),
+              h("div",{style:{fontSize:11,color:"rgba(232,220,200,0.5)",marginTop:1}},user.role+" · "+user.location),
+              h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.3)",fontStyle:"italic"}},user.tag)
+            ),
+            h("div",{style:{display:"flex",gap:7}},
+              attentes>0&&can("admin")&&h("div",{style:{background:"#E05A2B18",border:"1px solid #E05A2B",color:"#E05A2B",borderRadius:7,padding:"3px 10px",fontSize:11,fontWeight:800}},`${attentes} en attente`),
+              docsUrg>0&&can("documents")&&h("div",{style:{background:"#F0A50018",border:"1px solid #F0A500",color:"#F0A500",borderRadius:7,padding:"3px 10px",fontSize:11,fontWeight:800}},`${docsUrg} urgent${docsUrg>1?"s":""}`)
+            )
+          ),
+          // ENTITES
+          h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}},
+            Object.values(ENTITES).map((e,i)=>h("div",{key:i,style:{padding:"10px 14px",borderRadius:10,background:e.color+"10",border:`1px solid ${e.color}28`}},
+              h("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:3}},
+                h("span",null,e.icon),
+                h("span",{style:{fontWeight:900,fontSize:12,color:e.color}},e.nom),
+                h("span",{style:{fontSize:9,background:e.color+"22",color:e.color,borderRadius:4,padding:"1px 5px"}},e.canal)
+              ),
+              h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.35)"}},e.type)
+            ))
+          ),
+          // NAV
+          h("nav",{style:{display:"flex",gap:3,marginBottom:12,overflowX:"auto"}},
+            TABS.map(t=>h("button",{key:t.id,onClick:()=>setTab(t.id),style:{padding:"7px 13px",borderRadius:8,cursor:"pointer",whiteSpace:"nowrap",border:`1px solid ${tab===t.id?"rgba(201,168,76,0.5)":"rgba(255,255,255,0.07)"}`,background:tab===t.id?"rgba(201,168,76,0.13)":"transparent",color:tab===t.id?"#C9A84C":"rgba(232,220,200,0.45)",fontFamily:"inherit",fontSize:12,fontWeight:tab===t.id?800:400}},t.icon+" "+t.label))
+          ),
+          // DASHBOARD
+          tab==="dashboard"&&h("div",{style:{display:"flex",flexDirection:"column",gap:12}},
+            h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:9}},
+              [{label:"Moules actifs",val:moules.filter(m=>m.statut!=="approuvé"&&m.statut!=="rejeté").length,icon:"🔩",color:"#C9A84C",show:can("moules")},{label:"Fournisseurs actifs",val:fournisseurs.filter(f=>f.statut!=="prospect").length,icon:"🏭",color:"#3DAB7E",show:can("fournisseurs")},{label:"SKUs Phase 1",val:PRODUITS.filter(p=>p.phase==="jetable").length,icon:"🌿",color:"#4C8EBF",show:true},{label:"Docs urgents",val:docsUrg,icon:"📄",color:"#E05A2B",show:can("documents")},{label:"En attente",val:attentes,icon:"⚖️",color:"#F0A500",show:true}]
+              .filter(k=>k.show).map((k,i)=>h(Card,{key:i,style:{textAlign:"center",padding:"14px 10px"}},
+                h("div",{style:{fontSize:22,marginBottom:5}},k.icon),
+                h("div",{style:{fontSize:26,fontWeight:900,color:k.color}},k.val),
+                h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.4)",marginTop:3}},k.label)
+              ))
+            ),
+            h(Card,{style:{border:`1px solid ${fbOk?"rgba(61,171,126,0.35)":"rgba(240,165,0,0.35)"}`}},
+              h("div",{style:{display:"flex",alignItems:"center",gap:12}},
+                h("div",{style:{fontSize:32}},fbOk?"☁️":"⏳"),
+                h("div",{style:{flex:1}},
+                  h("div",{style:{fontWeight:900,fontSize:14,color:fbOk?"#3DAB7E":"#F0A500"}},fbOk?"Firebase connecté — LIVE actif!":"Connexion Firebase en cours..."),
+                  h("div",{style:{fontSize:11,color:"rgba(232,220,200,0.45)",marginTop:4}},fbOk?"Castro (Florida) et Gandhi (Haiti) voient toutes vos actions en temps reel.":"Verification connexion base de donnees ErgoEcoSet...")
+                )
+              )
+            ),
+            can("produits")&&h(Card,null,
+              h("div",{style:{marginBottom:14}},h("h2",{style:{fontSize:15,fontWeight:900,color:"#f0e6c8"}},"🌿 EcoTakeOut Collection")),
+              h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:7}},
+                PRODUITS.map(p=>h("div",{key:p.id,style:{padding:"9px 11px",borderRadius:9,background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)"}},
+                  h("div",{style:{fontSize:18,marginBottom:5}},p.icon),
+                  h("div",{style:{fontWeight:800,fontSize:12}},p.nom),
+                  h("div",{style:{marginTop:5}},h(Badge,{s:p.statut,sm:true}))
+                ))
+              )
+            ),
+            h(Card,null,
+              h("h2",{style:{fontSize:15,fontWeight:900,color:"#f0e6c8",marginBottom:14}},"⚖️ Decisions recentes"),
+              h("div",{style:{display:"flex",flexDirection:"column",gap:7}},
+                decisions.slice(0,4).map(d=>h(Row,{key:d.id,urgent:d.priorité==="urgente"},
+                  h(Av,{uid:d.demandeur,size:28}),
+                  h("div",{style:{flex:1,minWidth:120}},
+                    h("div",{style:{fontSize:12,fontWeight:700}},d.sujet),
+                    h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.35)"}},USERS[d.demandeur]?.name+" · "+d.date)
+                  ),
+                  h(EBadge,{e:d.entite}),h(Badge,{s:d.statut}),h(Badge,{s:d.priorité}),
+                  can("admin")&&d.statut==="en_attente"&&h("div",{style:{display:"flex",gap:4}},
+                    h(Btn,{color:"#3DAB7E",onClick:()=>approuver("decisions",d.id)},"✓"),
+                    h(Btn,{color:"#E05A2B",onClick:()=>rejeter("decisions",d.id)},"✗")
+                  )
+                ))
+              )
+            )
+          ),
+          // MOULES
+          tab==="moules"&&can("moules")&&h(Card,null,
+            h("h2",{style:{fontSize:15,fontWeight:900,color:"#f0e6c8",marginBottom:14}},"🔩 Moules & Prototypes"),
+            h("div",{style:{display:"flex",flexDirection:"column",gap:9}},
+              moules.map(m=>h("div",{key:m.id,style:{padding:"12px 15px",borderRadius:11,background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.08)"}},
+                h("div",{style:{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}},
+                  h("div",{style:{flex:1}},
+                    h("div",{style:{fontWeight:800,fontSize:14}},m.produit),
+                    h("div",{style:{fontSize:11,color:"rgba(232,220,200,0.4)",marginTop:3}},"🏭 "+m.fournisseur+" · Est. "+m.dateEst),
+                    h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.3)",fontStyle:"italic"}},m.specs)
+                  ),
+                  h("div",{style:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}},
+                    h("div",{style:{fontWeight:900,fontSize:15,color:"#C9A84C"}},(m.cout||0).toLocaleString()+" "+m.devise),
+                    h(Badge,{s:m.statut})
+                  )
+                ),
+                h("div",{style:{marginTop:9,display:"flex",gap:6}},
+                  can("admin")&&m.statut!=="approuvé"&&m.statut!=="rejeté"&&h("div",{style:{display:"flex",gap:6}},
+                    h(Btn,{color:"#3DAB7E",onClick:()=>approuver("moules",m.id)},"✓ Valider"),
+                    h(Btn,{color:"#E05A2B",onClick:()=>rejeter("moules",m.id)},"✗ Rejeter")
+                  ),
+                  !can("admin")&&m.statut!=="approuvé"&&m.statut!=="rejeté"&&h(Btn,{color:"#C9A84C",onClick:()=>{logAct("Soumis: "+m.produit,"ergo");showToast("Soumis a Guy Augustin");}},"→ Soumettre a Guy")
+                )
+              ))
+            )
+          ),
+          // FOURNISSEURS
+          tab==="fournisseurs"&&can("fournisseurs")&&h(Card,null,
+            h("h2",{style:{fontSize:15,fontWeight:900,color:"#f0e6c8",marginBottom:14}},"🏭 Fournisseurs — Chine"),
+            h("div",{style:{display:"flex",flexDirection:"column",gap:9}},
+              fournisseurs.map(f=>h("div",{key:f.id,style:{padding:"13px 16px",borderRadius:11,background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.08)"}},
+                h("div",{style:{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}},
+                  h("div",{style:{flex:1}},
+                    h("div",{style:{fontWeight:800,fontSize:15}},f.nom),
+                    h("div",{style:{fontSize:11,color:"rgba(232,220,200,0.4)"}},f.pays||"Chine 🇨🇳"+" · "+f.ville),
+                    h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.3)",fontStyle:"italic"}},f.note),
+                    h("div",{style:{display:"flex",gap:5,marginTop:7,flexWrap:"wrap"}},
+                      (f.produits||[]).map(p=>h("span",{key:p,style:{background:"rgba(201,168,76,0.14)",color:"#C9A84C",borderRadius:5,padding:"1px 7px",fontSize:10,fontWeight:700}},p)),
+                      f.bpas&&h("span",{style:{background:"rgba(61,171,126,0.14)",color:"#3DAB7E",borderRadius:5,padding:"1px 7px",fontSize:10,fontWeight:700}},"✓ BPA-free")
+                    )
+                  ),
+                  h(Badge,{s:f.statut})
+                )
+              ))
+            )
+          ),
+          // FINANCES
+          tab==="finances"&&can("finance")&&h(Card,null,
+            h("h2",{style:{fontSize:15,fontWeight:900,color:"#f0e6c8",marginBottom:14}},"💰 Finances & Depenses"),
+            h("div",{style:{display:"flex",flexDirection:"column",gap:7}},
+              finances.map(f=>h(Row,{key:f.id},
+                h("div",{style:{flex:1,minWidth:150}},
+                  h("div",{style:{fontWeight:700,fontSize:13}},f.label),
+                  h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.35)"}},USERS[f.auteur]?.name+" · "+f.date)
+                ),
+                h(EBadge,{e:f.entite}),
+                h("div",{style:{fontWeight:900,fontSize:15,color:"#C9A84C"}},(f.montant||0).toLocaleString()+" "+f.devise),
+                h(Badge,{s:f.statut}),
+                can("admin")&&f.statut==="en_attente"&&h("div",{style:{display:"flex",gap:4}},h(Btn,{color:"#3DAB7E",onClick:()=>approuver("finances",f.id)},"✓"),h(Btn,{color:"#E05A2B",onClick:()=>rejeter("finances",f.id)},"✗")),
+                !can("admin")&&f.statut==="en_attente"&&h(Btn,{color:"#C9A84C",onClick:()=>{logAct("Finance: "+f.label,f.entite);showToast("Soumis a Guy");}},"→ Guy")
+              ))
+            )
+          ),
+          // DOCUMENTS
+          tab==="documents"&&can("documents")&&h(Card,null,
+            h("h2",{style:{fontSize:15,fontWeight:900,color:"#f0e6c8",marginBottom:14}},"📄 Documents & Legal"),
+            h("div",{style:{display:"flex",flexDirection:"column",gap:7}},
+              documents.map(d=>h(Row,{key:d.id,urgent:d.urgent&&d.statut!=="approuvé"},
+                h("div",{style:{flex:1,minWidth:150}},
+                  h("div",{style:{fontWeight:700,fontSize:13}},d.urgent&&d.statut!=="approuvé"&&h("span",{style:{color:"#E05A2B",marginRight:4}},"🔴"),d.titre),
+                  h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.35)"}},d.type+" · "+d.date+" · "+USERS[d.assigné]?.name)
+                ),
+                h(EBadge,{e:d.entite}),h(Badge,{s:d.statut}),
+                (d.statut==="a_reviser"||d.statut==="à_réviser")&&h("div",{style:{display:"flex",gap:4}},
+                  h(Btn,{color:"#3DAB7E",onClick:()=>approuver("documents",d.id)},"✓ Valider"),
+                  !can("admin")&&h(Btn,{color:"#C9A84C",onClick:()=>{logAct("Doc: "+d.titre,d.entite);showToast("Transmis a Guy");}},"→ Guy")
+                )
+              ))
+            )
+          ),
+          // DECISIONS
+          tab==="decisions"&&h("div",{style:{display:"flex",flexDirection:"column",gap:12}},
+            h(Card,null,
+              h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
+                h("h2",{style:{fontSize:15,fontWeight:900,color:"#f0e6c8"}},"⚖️ Centre de Decisions"),
+                h(Btn,{color:"#C9A84C",onClick:()=>setShowND(!showND)},"+ Nouvelle")
+              ),
+              showND&&h("div",{style:{padding:13,borderRadius:10,marginBottom:13,background:"rgba(201,168,76,0.07)",border:"1px solid rgba(201,168,76,0.22)"}},
+                h("div",{style:{fontSize:12,fontWeight:800,color:"#C9A84C",marginBottom:9}},"Soumettre a Guy Augustin"),
+                h("input",{value:nd.sujet,onChange:e=>setNd(n=>({...n,sujet:e.target.value})),placeholder:"Sujet...",style:inp}),
+                h("textarea",{value:nd.notes,onChange:e=>setNd(n=>({...n,notes:e.target.value})),placeholder:"Notes...",rows:2,style:{...inp,resize:"vertical",marginTop:6}}),
+                h("div",{style:{display:"flex",gap:7,marginTop:7,flexWrap:"wrap",alignItems:"center"}},
+                  h("select",{value:nd.priorité,onChange:e=>setNd(n=>({...n,priorité:e.target.value})),style:{...inp,width:"auto"}},
+                    h("option",{value:"normale"},"🟢 Normale"),h("option",{value:"haute"},"🟡 Haute"),h("option",{value:"urgente"},"🔴 Urgente")
+                  ),
+                  h("select",{value:nd.entite,onChange:e=>setNd(n=>({...n,entite:e.target.value})),style:{...inp,width:"auto"}},
+                    h("option",{value:"ergo"},"🌿 ErgoEcoSet Inc."),h("option",{value:"express"},"🛍️ Express-E-Boutique")
+                  ),
+                  h(Btn,{color:"#C9A84C",onClick:soumettreDecision},"Soumettre"),
+                  h(Btn,{color:"#666",onClick:()=>setShowND(false)},"Annuler")
+                )
+              ),
+              h("div",{style:{display:"flex",flexDirection:"column",gap:7}},
+                decisions.map(d=>h(Row,{key:d.id,urgent:d.priorité==="urgente"},
+                  h(Av,{uid:d.demandeur,size:30}),
+                  h("div",{style:{flex:1,minWidth:140}},
+                    h("div",{style:{fontWeight:700,fontSize:13}},d.sujet),
+                    d.notes&&h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.38)",fontStyle:"italic"}},d.notes),
+                    h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.3)"}},USERS[d.demandeur]?.name+" · "+d.date)
+                  ),
+                  h(EBadge,{e:d.entite}),h(Badge,{s:d.statut}),h(Badge,{s:d.priorité}),
+                  can("admin")&&d.statut==="en_attente"&&h("div",{style:{display:"flex",gap:4}},
+                    h(Btn,{color:"#3DAB7E",onClick:()=>approuver("decisions",d.id)},"✓ Approuver"),
+                    h(Btn,{color:"#E05A2B",onClick:()=>rejeter("decisions",d.id)},"✗")
+                  )
+                ))
+              )
+            ),
+            h(Card,null,
+              h("h2",{style:{fontSize:15,fontWeight:900,color:"#f0e6c8",marginBottom:14}},"👥 Roles & Acces — Famille Augustin"),
+              h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:9}},
+                Object.values(USERS).map(u=>h("div",{key:u.id,style:{padding:13,borderRadius:10,background:u.color+"09",border:`1px solid ${u.color}25`}},
+                  h("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:8}},h(Av,{uid:u.id,size:36}),h("div",null,h("div",{style:{fontWeight:900,fontSize:13,color:u.color}},u.name),h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.38)"}},u.location))),
+                  h("div",{style:{fontSize:11,color:"rgba(232,220,200,0.5)",marginBottom:5}},u.role),
+                  h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.3)",fontStyle:"italic",marginBottom:7}},u.tag),
+                  h("div",{style:{display:"flex",flexWrap:"wrap",gap:3}},u.permissions.map(p=>h("span",{key:p,style:{background:u.color+"18",color:u.color,borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:800}},p)))
+                ))
+              )
+            )
+          ),
+          // ACTIVITE
+          tab==="activite"&&h(Card,null,
+            h("h2",{style:{fontSize:15,fontWeight:900,color:"#f0e6c8",marginBottom:14}},"📡 Journal activite "+(fbOk?"🔥 LIVE":"")),
+            activite.length===0
+              ?h("div",{style:{fontSize:12,color:"rgba(232,220,200,0.3)",textAlign:"center",padding:"24px 0"}},"Aucune activite — approuvez des elements pour voir le journal.")
+              :h("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+                activite.map((a,i)=>h("div",{key:i,style:{display:"flex",alignItems:"center",gap:9,padding:"8px 12px",borderRadius:8,background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)"}},
+                  h(Av,{uid:a.auteur,size:26}),
+                  h("div",{style:{flex:1}},
+                    h("div",{style:{fontSize:12,fontWeight:700}},a.action),
+                    h("div",{style:{fontSize:10,color:"rgba(232,220,200,0.35)"}},USERS[a.auteur]?.name+" · "+(a.ts?new Date(a.ts).toLocaleString("fr-CA",{hour:"2-digit",minute:"2-digit",day:"numeric",month:"short"}):""))
+                  ),
+                  h(EBadge,{e:a.entite})
+                ))
+              )
+          ),
+          h("div",{style:{height:50}})
+        )
+      );
+    }
+
+    // Render
+    setTimeout(()=>{
+      const root = createRoot(document.getElementById("root"));
+      root.render(h(App,null));
+    }, 100);
+  </script>
+  <style>
+    select option { background: #0d1a18; color: #e8dcc8; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: rgba(61,171,126,0.3); border-radius: 2px; }
+    * { box-sizing: border-box; }
+  </style>
+</body>
+</html>
